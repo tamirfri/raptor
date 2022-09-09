@@ -21,15 +21,16 @@ package e2e
 
 import (
 	"context"
-	manifests "github.com/raptor-ml/raptor/api/v1alpha1"
-	"os"
-	"sigs.k8s.io/e2e-framework/pkg/envfuncs"
 	"testing"
+
+	manifests "github.com/raptor-ml/raptor/api/v1alpha1"
+	"github.com/raptor-ml/raptor/config"
 
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/e2e-framework/klient/decoder"
 	"sigs.k8s.io/e2e-framework/klient/k8s/resources"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
+	"sigs.k8s.io/e2e-framework/pkg/envfuncs"
 	"sigs.k8s.io/e2e-framework/pkg/features"
 )
 
@@ -57,8 +58,7 @@ func TestSamples(t *testing.T) {
 			}
 
 			err = DecodeEachFileWithFilter(
-				ctx, os.DirFS("../../config/samples/"), FilterKustomize,
-				decoder.CreateHandler(r),
+				ctx, config.Samples, FilterKustomize, decoder.CreateHandler(r),
 				decoder.MutateNamespace(namespace),
 			)
 			if err != nil {
@@ -84,7 +84,7 @@ func TestSamples(t *testing.T) {
 				return ctx
 			}
 
-			ct := &manifests.Feature{}
+			ct := new(manifests.Feature)
 			err = r.Get(ctx, "hello-world", namespace, ct)
 			if err != nil {
 				t.Errorf("failed to get hello-world: %s", err)

@@ -19,6 +19,9 @@ package accessor
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/http"
+
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	grpcMiddleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -32,8 +35,6 @@ import (
 	coreApi "go.buf.build/raptor/api-go/raptor/core/raptor/core/v1alpha1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
-	"net"
-	"net/http"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
@@ -49,12 +50,20 @@ type accessor struct {
 }
 
 func New(e api.FeatureManager, logger logr.Logger) Accessor {
+	engine, ok := e.(api.Engine)
+	if !ok {
+		panic("e FeatureManager is not Engine")
+	}
 	svc := &accessor{
-		sdkServer: sdk.NewServiceServer(e.(api.Engine)),
+		sdkServer: sdk.NewServiceServer(engine),
 		logger:    logger,
 	}
 
-	zapLogger := svc.logger.GetSink().(zapr.Underlier).GetUnderlying()
+	zapUnderlier, ok := svc.logger.GetSink().(zapr.Underlier)
+	if !ok {
+		panic("logr.LogSync does not implement Underlier interface")
+	}
+	zapLogger := zapUnderlier.GetUnderlying()
 
 	grpcMetrics := grpcPrometheus.NewServerMetrics()
 	metrics.Registry.MustRegister(grpcMetrics)
@@ -114,7 +123,7 @@ func (a *accessor) HTTP(addr string, prefix string) NoLeaderRunnableFunc {
 		srv := http.Server{Handler: mux, Addr: addr}
 		go func() {
 			<-ctx.Done()
-			_ = srv.Shutdown(context.TODO())
+			_ = srv.Shutdown(ctx)
 		}()
 		return srv.ListenAndServe()
 	}

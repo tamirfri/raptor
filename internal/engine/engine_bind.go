@@ -18,6 +18,7 @@ package engine
 
 import (
 	"fmt"
+
 	"github.com/raptor-ml/raptor/api"
 	manifests "github.com/raptor-ml/raptor/api/v1alpha1"
 	"github.com/raptor-ml/raptor/internal/stats"
@@ -82,12 +83,14 @@ func (e *engine) BindDataConnector(md api.DataConnector) error {
 	e.dataConnectors.Store(md.FQN, md)
 	return nil
 }
-func (e *engine) UnbindDataConnector(FQN string) error {
-	e.dataConnectors.Delete(FQN)
+
+func (e *engine) UnbindDataConnector(fqn string) error {
+	e.dataConnectors.Delete(fqn)
 	return nil
 }
-func (e *engine) HasDataConnector(FQN string) bool {
-	_, ok := e.dataConnectors.Load(FQN)
+
+func (e *engine) HasDataConnector(fqn string) bool {
+	_, ok := e.dataConnectors.Load(fqn)
 	return ok
 }
 
@@ -96,5 +99,9 @@ func (e *engine) GetDataConnector(fqn string) (api.DataConnector, error) {
 	if !ok {
 		return api.DataConnector{}, fmt.Errorf("DataConnector %s not found", fqn)
 	}
-	return md.(api.DataConnector), nil
+	m, ok := md.(api.DataConnector)
+	if !ok {
+		return api.DataConnector{}, fmt.Errorf("feature %s failed to cast to DataConnector", fqn)
+	}
+	return m, nil
 }

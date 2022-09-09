@@ -20,9 +20,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/raptor-ml/raptor/api"
 	manifests "github.com/raptor-ml/raptor/api/v1alpha1"
-	"time"
 )
 
 type featureSetQuery struct {
@@ -55,6 +56,7 @@ func (qb *queryBuilder) FeatureSet(ctx context.Context, fs manifests.FeatureSetS
 			FeaturesTable: qb.featureTable,
 		},
 		KeyFeature: fs.KeyFeature,
+		Features:   make([]api.Metadata, 0, len(fs.Features)),
 	}
 
 	for _, fqn := range fs.Features {

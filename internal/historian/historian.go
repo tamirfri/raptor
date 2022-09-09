@@ -20,19 +20,23 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/go-logr/logr"
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/raptor-ml/raptor/api"
 	manifests "github.com/raptor-ml/raptor/api/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sync"
-	"time"
 )
 
-const SyncPeriod = 5 * time.Minute
-const DeadRequestMarker = "*dead*"
+const (
+	SyncPeriod        = 5 * time.Minute
+	DeadRequestMarker = "*dead*"
+)
 
 // Although this is done at compile time, we want to make sure nobody messed with the numbers inappropriately
+//
 //goland:noinspection GoBoolExpressions
 func init() {
 	if api.DeadGracePeriod < (SyncPeriod - (30 * time.Second)) {
@@ -102,7 +106,7 @@ func (h *historian) BindFeature(in *manifests.Feature) error {
 
 	var fs *manifests.FeatureSetSpec
 	if md.Builder == api.FeatureSetBuilder {
-		fs = &manifests.FeatureSetSpec{}
+		fs = new(manifests.FeatureSetSpec)
 		err := json.Unmarshal(in.Spec.Builder.Raw, fs)
 		if err != nil {
 			return fmt.Errorf("failed to parse featureset builder spec: %w", err)
@@ -138,12 +142,17 @@ func (h *historian) HasFeature(fqn string) bool {
 	_, ok := h.metadata.Load(fqn)
 	return ok
 }
-func (h *historian) Metadata(ctx context.Context, FQN string) (api.Metadata, error) {
-	md, ok := h.metadata.Load(FQN)
+
+func (h *historian) Metadata(ctx context.Context, fqn string) (api.Metadata, error) {
+	md, ok := h.metadata.Load(fqn)
 	if !ok {
 		return api.Metadata{}, api.ErrFeatureNotFound
 	}
-	return md.(api.Metadata), nil
+	m, ok := md.(api.Metadata)
+	if !ok {
+		return api.Metadata{}, api.ErrUnsupportedPrimitiveError
+	}
+	return m, nil
 }
 
 func timeTillNextBucket(bucketSize time.Duration) time.Duration {

@@ -18,8 +18,9 @@ package dryengine
 
 import (
 	"context"
-	"github.com/raptor-ml/raptor/api"
 	"time"
+
+	"github.com/raptor-ml/raptor/api"
 )
 
 type ValueMeta struct {
@@ -71,64 +72,71 @@ func New(data DependenciesData, discoveryMode bool) DryEngine {
 	}
 }
 
-func (d *dry) Metadata(_ context.Context, FQN string) (api.Metadata, error) {
+func (d *dry) Metadata(_ context.Context, fqn string) (api.Metadata, error) {
 	return api.Metadata{}, nil
 }
-func (d *dry) Get(_ context.Context, FQN string, entityID string) (api.Value, api.Metadata, error) {
+
+func (d *dry) Get(_ context.Context, fqn string, entityID string) (api.Value, api.Metadata, error) {
 	if d.discovery {
-		d.discovered[FQN] = struct{}{}
+		d.discovered[fqn] = struct{}{}
 		return api.Value{}, api.Metadata{}, nil
 	}
-	if f, ok := d.dd[FQN]; ok {
+	if f, ok := d.dd[fqn]; ok {
 		if v, ok := f[entityID]; ok {
 			return v.Value, v.Metadata, nil
 		}
 	}
 	return api.Value{}, api.Metadata{}, api.ErrFeatureNotFound
 }
-func (d *dry) Set(_ context.Context, FQN string, entityID string, val any, ts time.Time) error {
+
+func (d *dry) Set(_ context.Context, fqn string, entityID string, val any, ts time.Time) error {
 	d.instructions = append(d.instructions, Instruction{
 		Operation: InstructionOpSet,
-		FQN:       FQN,
+		FQN:       fqn,
 		EntityID:  entityID,
 		Timestamp: ts,
 		Value:     val,
 	})
 	return nil
 }
-func (d *dry) Append(_ context.Context, FQN string, entityID string, val any, ts time.Time) error {
+
+func (d *dry) Append(_ context.Context, fqn string, entityID string, val any, ts time.Time) error {
 	d.instructions = append(d.instructions, Instruction{
 		Operation: InstructionOpAppend,
-		FQN:       FQN,
+		FQN:       fqn,
 		EntityID:  entityID,
 		Timestamp: ts,
 		Value:     val,
 	})
 	return nil
 }
-func (d *dry) Incr(_ context.Context, FQN string, entityID string, by any, ts time.Time) error {
+
+func (d *dry) Incr(_ context.Context, fqn string, entityID string, by any, ts time.Time) error {
 	d.instructions = append(d.instructions, Instruction{
 		Operation: InstructionOpIncr,
-		FQN:       FQN,
+		FQN:       fqn,
 		EntityID:  entityID,
 		Timestamp: ts,
 		Value:     by,
 	})
 	return nil
 }
-func (d *dry) Update(_ context.Context, FQN string, entityID string, val any, ts time.Time) error {
+
+func (d *dry) Update(_ context.Context, fqn string, entityID string, val any, ts time.Time) error {
 	d.instructions = append(d.instructions, Instruction{
 		Operation: InstructionOpUpdate,
-		FQN:       FQN,
+		FQN:       fqn,
 		EntityID:  entityID,
 		Timestamp: ts,
 		Value:     val,
 	})
 	return nil
 }
+
 func (d *dry) Instructions() []Instruction {
 	return d.instructions
 }
+
 func (d *dry) Dependencies() []string {
 	discovered := make([]string, 0, len(d.discovered))
 	for k := range d.discovered {

@@ -39,6 +39,7 @@ func attachCoreConnector(rcl reconcile.Reconciler, obj client.Object, updatesAll
 	_, err := newCoreController(rcl, obj, updatesAllowed, mgr)
 	return err
 }
+
 func newCoreController(rcl reconcile.Reconciler, obj client.Object, updatesAllowed bool, mgr manager.Manager) (controller.Controller, error) {
 	basec, err := controller.NewUnmanaged("core", mgr, controller.Options{Reconciler: rcl})
 	if err != nil {
@@ -60,7 +61,7 @@ func newCoreController(rcl reconcile.Reconciler, obj client.Object, updatesAllow
 		})
 	}
 	src := &source.Kind{Type: obj}
-	err = c.Watch(src, &handler.EnqueueRequestForObject{}, prct...)
+	err = c.Watch(src, new(handler.EnqueueRequestForObject), prct...)
 	if err != nil {
 		return nil, err
 	}

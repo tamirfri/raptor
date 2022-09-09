@@ -20,10 +20,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/go-redis/redis/v8"
-	"github.com/raptor-ml/raptor/api"
 	"reflect"
 	"time"
+
+	"github.com/go-redis/redis/v8"
+	"github.com/raptor-ml/raptor/api"
 )
 
 func primitiveKey(fqn string, entityID string) string {
@@ -61,8 +62,8 @@ func (s *state) getPrimitive(ctx context.Context, md api.Metadata, entityID stri
 			return nil, err
 		}
 	} else {
-		var ret []any
 		res, err := s.client.LRange(ctx, key, 0, -1).Result()
+		ret := make([]any, 0, len(res))
 		if err != nil {
 			return nil, err
 		}
@@ -85,6 +86,7 @@ func (s *state) getPrimitive(ctx context.Context, md api.Metadata, entityID stri
 		Fresh:     time.Since(*ts) < md.Freshness,
 	}, nil
 }
+
 func (s *state) Update(ctx context.Context, md api.Metadata, entityID string, value any, ts time.Time) error {
 	if md.ValidWindow() {
 		return s.WindowAdd(ctx, md, entityID, value, ts)
@@ -94,6 +96,7 @@ func (s *state) Update(ctx context.Context, md api.Metadata, entityID string, va
 	}
 	return s.Append(ctx, md, entityID, value, ts)
 }
+
 func (s *state) Set(ctx context.Context, md api.Metadata, entityID string, value any, ts time.Time) error {
 	if md.ValidWindow() {
 		return s.WindowAdd(ctx, md, entityID, value, ts)
@@ -109,20 +112,25 @@ func (s *state) Set(ctx context.Context, md api.Metadata, entityID string, value
 		tx.Set(ctx, key, api.ScalarString(value), md.Staleness)
 	} else {
 		tx.Del(ctx, key)
-		var kv []any
-		for i := 0; i < reflect.ValueOf(value).Len(); i++ {
-			kv = append(kv, reflect.ValueOf(value).Index(i).Interface())
+		reflectedSlice := reflect.ValueOf(value)
+		reflectedLen := reflectedSlice.Len()
+		kv := make([]any, 0, reflectedLen)
+		for i := 0; i < reflectedLen; i++ {
+			kv = append(kv, reflectedSlice.Index(i).Interface())
 		}
 		tx.RPush(ctx, key, kv...)
 		if md.Staleness > 0 {
 			tx.PExpire(ctx, key, md.Staleness)
 		}
 	}
-	setTimestamp(ctx, tx, key, ts, md.Staleness)
+	if err := setTimestamp(ctx, tx, key, ts, md.Staleness).Err(); err != nil {
+		return err
+	}
 
 	_, err := tx.Exec(ctx)
 	return err
 }
+
 func (s *state) Append(ctx context.Context, md api.Metadata, entityID string, value any, ts time.Time) error {
 	if md.ValidWindow() {
 		return fmt.Errorf("cannot append a windowed feature")
@@ -141,7 +149,9 @@ func (s *state) Append(ctx context.Context, md api.Metadata, entityID string, va
 	if md.Staleness > 0 {
 		tx.PExpire(ctx, key, md.Staleness)
 	}
-	setTimestamp(ctx, tx, key, ts, md.Staleness)
+	if err := setTimestamp(ctx, tx, key, ts, md.Staleness).Err(); err != nil {
+		return err
+	}
 
 	_, err := tx.Exec(ctx)
 	return err
@@ -172,7 +182,9 @@ func (s *state) Incr(ctx context.Context, md api.Metadata, entityID string, valu
 	if md.Staleness > 0 {
 		tx.PExpire(ctx, key, md.Staleness)
 	}
-	setTimestamp(ctx, tx, key, ts, md.Staleness)
+	if err := setTimestamp(ctx, tx, key, ts, md.Staleness).Err(); err != nil {
+		return err
+	}
 
 	_, err := tx.Exec(ctx)
 	return err

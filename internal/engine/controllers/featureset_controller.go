@@ -21,12 +21,13 @@ package controllers
 import (
 	"context"
 	"encoding/json"
+	"time"
+
 	"github.com/raptor-ml/raptor/api"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"time"
 
 	raptorApi "github.com/raptor-ml/raptor/api/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -46,7 +47,7 @@ func (r *FeatureSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	logger := log.FromContext(ctx)
 
 	// Fetch the FeatureSet definition from the Kubernetes API.
-	fs := &raptorApi.FeatureSet{}
+	fs := new(raptorApi.FeatureSet)
 	err := r.Get(ctx, req.NamespacedName, fs)
 	if err != nil {
 		logger.Error(err, "Failed to get FeatureSet")
@@ -107,5 +108,5 @@ func (r *FeatureSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 // SetupWithManager sets up the controller with the Controller Manager.
 func (r *FeatureSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return attachCoreConnector(r, &raptorApi.FeatureSet{}, true, mgr)
+	return attachCoreConnector(r, new(raptorApi.FeatureSet), true, mgr)
 }

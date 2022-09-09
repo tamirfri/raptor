@@ -72,6 +72,7 @@ func (pt PrimitiveType) Scalar() bool {
 		return true
 	}
 }
+
 func (pt PrimitiveType) Singular() PrimitiveType {
 	switch pt {
 	case PrimitiveTypeTimestampList:
@@ -86,6 +87,7 @@ func (pt PrimitiveType) Singular() PrimitiveType {
 		return pt
 	}
 }
+
 func (pt PrimitiveType) Plural() PrimitiveType {
 	switch pt {
 	case PrimitiveTypeTimestamp:
@@ -100,6 +102,7 @@ func (pt PrimitiveType) Plural() PrimitiveType {
 		return pt
 	}
 }
+
 func (pt PrimitiveType) String() string {
 	switch pt {
 	case PrimitiveTypeString:
@@ -124,6 +127,7 @@ func (pt PrimitiveType) String() string {
 		return "(unknown)"
 	}
 }
+
 func (pt PrimitiveType) Interface() any {
 	if !pt.Scalar() {
 		return reflect.MakeSlice(reflect.SliceOf(reflect.TypeOf(pt.Singular().Interface())), 0, 0).Interface()
@@ -159,7 +163,7 @@ func ScalarString(val any) string {
 
 func ScalarFromString(val string, scalar PrimitiveType) (any, error) {
 	if !scalar.Scalar() {
-		return nil, fmt.Errorf("%s is not a scalar type", scalar)
+		return nil, fmt.Errorf("%v is not a scalar type", scalar)
 	}
 	switch scalar {
 	case PrimitiveTypeInteger:
@@ -181,30 +185,30 @@ func ScalarFromString(val string, scalar PrimitiveType) (any, error) {
 
 // TypeDetect detects the PrimitiveType of the value.
 func TypeDetect(t any) PrimitiveType {
-	reflectType := reflect.TypeOf(t)
-	if reflectType == reflect.TypeOf([]any{}) {
-		for _, v := range t.([]any) {
-			if reflect.TypeOf(v) != reflect.TypeOf(t.([]any)[0]) {
+	switch val := t.(type) {
+	case []any:
+		for _, v := range val {
+			if reflect.TypeOf(v) != reflect.TypeOf(val[0]) {
 				return PrimitiveTypeUnknown
 			}
 		}
-		return TypeDetect(t.([]any)[0]).Plural()
+		return TypeDetect(val[0]).Plural()
+	default:
+		return StringToPrimitiveType(reflect.TypeOf(val).String())
 	}
-	return StringToPrimitiveType(reflectType.String())
 }
 
 func NormalizeAny(t any) (any, error) {
-	switch v := t.(type) {
-	case []any:
-		if len(v) == 0 {
-			return nil, nil
-		}
-
-		ret := reflect.MakeSlice(reflect.SliceOf(reflect.TypeOf(v[0])), len(v), len(v))
-		for i, v2 := range v {
-			ret.Index(i).Set(reflect.ValueOf(v2))
-		}
-		t = ret.Interface()
+	v, ok := t.([]any)
+	if !ok {
+		return t, nil
 	}
-	return t, nil
+	if len(v) == 0 {
+		return nil, nil
+	}
+	ret := reflect.MakeSlice(reflect.SliceOf(reflect.TypeOf(v[0])), len(v), len(v))
+	for i, v2 := range v {
+		ret.Index(i).Set(reflect.ValueOf(v2))
+	}
+	return ret.Interface(), nil
 }

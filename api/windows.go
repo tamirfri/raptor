@@ -70,7 +70,7 @@ func (w WindowFn) String() string {
 }
 
 func StringsToWindowFns(fns []string) ([]WindowFn, error) {
-	windowFnsMap := make(map[WindowFn]bool)
+	windowFnsMap := make(map[WindowFn]bool, len(fns))
 	for _, fn := range fns {
 		f := StringToWindowFn(fn)
 		if f == WindowFnUnknown {
@@ -80,13 +80,14 @@ func StringsToWindowFns(fns []string) ([]WindowFn, error) {
 	}
 
 	// Unique
-	var windowFns []WindowFn
+	windowFns := make([]WindowFn, 0, len(windowFnsMap))
 	for f := range windowFnsMap {
 		windowFns = append(windowFns, f)
 	}
 
 	return windowFns, nil
 }
+
 func StringToWindowFn(s string) WindowFn {
 	switch strings.ToLower(s) {
 	case "sum":

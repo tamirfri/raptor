@@ -18,6 +18,7 @@ package streaming
 
 import (
 	"fmt"
+
 	"github.com/raptor-ml/raptor/api"
 	manifests "github.com/raptor-ml/raptor/api/v1alpha1"
 	"github.com/raptor-ml/raptor/pkg/plugins"
@@ -56,7 +57,7 @@ func FeatureApply(md api.Metadata, builder manifests.FeatureBuilder, api api.Fea
 
 	dc, err := engine.GetDataConnector(md.DataConnector)
 	if err != nil {
-		return fmt.Errorf("failed to get data connector: %v", err)
+		return fmt.Errorf("failed to get data connector: %w", err)
 	}
 
 	if dc.Kind != name {

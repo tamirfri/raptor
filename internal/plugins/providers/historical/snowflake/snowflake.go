@@ -21,18 +21,21 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strings"
+
 	"github.com/raptor-ml/raptor/api"
 	"github.com/raptor-ml/raptor/pkg/plugins"
 	"github.com/raptor-ml/raptor/pkg/querybuilder"
 	sf "github.com/snowflakedb/gosnowflake"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	"net/url"
-	"strings"
 )
 
-const pluginName = "snowflake"
-const featuresTable = "HISTORICAL_FEATURES"
+const (
+	pluginName    = "snowflake"
+	featuresTable = "HISTORICAL_FEATURES"
+)
 
 func init() {
 	plugins.Configurers.Register(pluginName, BindConfig)
@@ -98,7 +101,7 @@ func (sw *snowflakeWriter) Commit(ctx context.Context, wn api.WriteNotification)
 		alive = &wn.ActiveBucket
 
 		wrm := api.ToLowLevelValue[api.WindowResultMap](wn.Value.Value)
-		v := make(map[string]float64)
+		v := make(map[string]float64, len(wrm))
 		for k, vv := range wrm {
 			v[k.String()] = vv
 		}

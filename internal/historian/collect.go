@@ -19,9 +19,10 @@ package historian
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/raptor-ml/raptor/api"
-	"strings"
 )
 
 func (h *historian) Collector() LeaderRunnableFunc {
@@ -43,7 +44,7 @@ func (h *historian) Collector() LeaderRunnableFunc {
 func (h *historian) dispatchCollect(ctx context.Context, notification api.CollectNotification) error {
 	md, err := h.Metadata(ctx, notification.FQN)
 	if err != nil {
-		return fmt.Errorf("failed to get metadata for %s", notification.FQN)
+		return fmt.Errorf("failed to get metadata for %s: %w", notification.FQN, err)
 	}
 
 	if md.ValidWindow() {
@@ -94,8 +95,9 @@ func (h *historian) dispatchCollectWithWindow(ctx context.Context, notification 
 }
 
 func (h *historian) dispatchCollectDead(ctx context.Context, md api.Metadata) error {
-	var ignore api.RawBuckets
-	for k := range h.handledBuckets.Items() {
+	items := h.handledBuckets.Items()
+	ignore := make(api.RawBuckets, 0, len(items))
+	for k := range items {
 		if strings.HasPrefix(k, fmt.Sprintf("%s/", md.FQN)) {
 			fqn, bucket, eid := fromDeadBucketKey(k)
 			ignore = append(ignore, api.RawBucket{
@@ -144,7 +146,8 @@ func contains(s []string, i string) bool {
 func deadBucketKey(fqn, bucket, eid string) string {
 	return fmt.Sprintf("%s/%s:%s", fqn, bucket, eid)
 }
-func fromDeadBucketKey(k string) (fqn string, bucket string, eid string) {
+
+func fromDeadBucketKey(k string) (fqn, bucket, eid string) {
 	firstSep := strings.Index(k, "/")
 	lastColon := strings.LastIndex(k, ":")
 	return k[:firstSep], k[firstSep+1 : lastColon], k[lastColon+1:]

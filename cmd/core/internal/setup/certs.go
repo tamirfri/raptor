@@ -25,6 +25,12 @@ package setup
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"os"
+	"path"
+	"reflect"
+	"time"
+
 	certApi "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	"github.com/go-logr/logr"
@@ -38,13 +44,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"net/http"
-	"os"
-	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"time"
 )
 
 func Certs(mgr manager.Manager, certsReady chan struct{}) {
@@ -105,8 +107,11 @@ var webhooks = []rotator.WebhookInfo{
 	},
 }
 
-func dnsName(ns string) string {
-	return fmt.Sprintf("%s.%s.svc", serviceName, ns)
+func dnsNames(ns string) []string {
+	const suffix = ".cluster.local"
+	localCluster := fmt.Sprintf(serviceName+".%s.svc"+suffix, ns)
+	commonName := localCluster[:len(localCluster)-len(suffix)]
+	return []string{commonName, localCluster}
 }
 
 func certManagerRunnable(client client.Client, scheme *runtime.Scheme, ns string, isReady chan struct{}) manager.RunnableFunc {
@@ -119,7 +124,7 @@ func certManagerRunnable(client client.Client, scheme *runtime.Scheme, ns string
 			return fmt.Errorf("unable to add cert-manager api to scheme: %w", err)
 		}
 
-		g, ctx := errgroup.WithContext(context.Background())
+		g, ctx := errgroup.WithContext(ctx)
 
 		g.Go(func() error {
 			logger := logger.WithName("setup")
@@ -132,7 +137,7 @@ func certManagerRunnable(client client.Client, scheme *runtime.Scheme, ns string
 			}}
 
 			_, err := ctrl.CreateOrUpdate(ctx, client, issuer, func() error {
-				issuer.Spec.SelfSigned = &certApi.SelfSignedIssuer{}
+				issuer.Spec.SelfSigned = new(certApi.SelfSignedIssuer)
 				return nil
 			})
 			if err != nil {
@@ -148,15 +153,13 @@ func certManagerRunnable(client client.Client, scheme *runtime.Scheme, ns string
 				Namespace: ns,
 			}}
 			_, err = ctrl.CreateOrUpdate(ctx, client, cert, func() error {
-				cert.Spec.CommonName = dnsName(ns)
+				cert.Spec.DNSNames = dnsNames(ns)
+				cert.Spec.CommonName = cert.Spec.DNSNames[0]
 				cert.Spec.IssuerRef = cmmeta.ObjectReference{
 					Name: caName,
 					Kind: certApi.IssuerKind,
 				}
 				cert.Spec.SecretName = secretName
-				cert.Spec.DNSNames = []string{
-					dnsName(ns),
-					fmt.Sprintf("%s.cluster.local", dnsName(ns))}
 				return nil
 			})
 			if err != nil {
@@ -167,14 +170,14 @@ func certManagerRunnable(client client.Client, scheme *runtime.Scheme, ns string
 		})
 
 		// Inject the CA certificate
-		injectName := fmt.Sprintf("%s/%s", ns, certName)
+		injectName := path.Join(ns, certName)
 
 		for _, wh := range webhooks {
 			wh := wh // https://golang.org/doc/faq#closures_and_goroutines
 			g.Go(func() error {
 				logger.Info("Injecting certificate", "webhook", wh.Name)
 
-				resource := &unstructured.Unstructured{}
+				resource := new(unstructured.Unstructured)
 				switch wh.Type {
 				case rotator.Mutating:
 					resource.SetGroupVersionKind(schema.GroupVersionKind{Group: "admissionregistration.k8s.io", Version: "v1", Kind: "MutatingWebhookConfiguration"})
@@ -194,14 +197,15 @@ func certManagerRunnable(client client.Client, scheme *runtime.Scheme, ns string
 					return err
 				}
 
-				annots := make(map[string]string)
-				for v, k := range resource.GetAnnotations() {
+				annotsOriginal := resource.GetAnnotations()
+				annots := make(map[string]string, len(annotsOriginal))
+				for v, k := range annotsOriginal {
 					annots[v] = k
 				}
 				annots["cert-manager.io/inject-ca-from"] = injectName
 				annots["csi.cert-manager.io/certificate-file"] = certFileName
 
-				if !reflect.DeepEqual(resource.GetAnnotations(), annots) {
+				if !reflect.DeepEqual(annotsOriginal, annots) {
 					resource.SetAnnotations(annots)
 					err = client.Update(ctx, resource)
 					if err != nil {
@@ -235,7 +239,7 @@ func certsWithCertsController(mgr manager.Manager, ns string, certsReady chan st
 		CertDir:                certDir,
 		CAName:                 caName,
 		CAOrganization:         caOrganization,
-		DNSName:                dnsName(ns),
+		DNSName:                dnsNames(ns)[0],
 		IsReady:                certsReady,
 		RestartOnSecretRefresh: true,
 		Webhooks:               webhooks,
@@ -252,6 +256,7 @@ type certsEnsurer struct {
 func (ce *certsEnsurer) NeedLeaderElection() bool {
 	return false
 }
+
 func (ce *certsEnsurer) Start(_ context.Context) error {
 	checkFn := func() (bool, error) {
 		select {
@@ -259,12 +264,15 @@ func (ce *certsEnsurer) Start(_ context.Context) error {
 			return true, nil
 		default:
 		}
-		certFile := certDir + "/" + certFileName
+		certFile := path.Join(certDir, certFileName)
 		_, err := os.Stat(certFile)
 		if err == nil {
 			return true, nil
 		}
-		return false, nil
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err // in case of real error like permissions
 	}
 	if err := wait.ExponentialBackoff(wait.Backoff{
 		Duration: 1 * time.Second,

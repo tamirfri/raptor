@@ -20,11 +20,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"sync"
+
 	"github.com/raptor-ml/raptor/api"
 	manifests "github.com/raptor-ml/raptor/api/v1alpha1"
 	"github.com/raptor-ml/raptor/pkg/plugins"
-	"strings"
-	"sync"
 )
 
 func init() {
@@ -43,7 +44,7 @@ func FeatureApply(md api.Metadata, builder manifests.FeatureBuilder, faapi api.F
 		return fmt.Errorf("featureset must have at least 2 features")
 	}
 
-	//normalize features
+	// normalize features
 	for i, f := range spec.Features {
 		ns := md.FQN[strings.Index(md.FQN, ".")+1:]
 		spec.Features[i] = api.NormalizeFQN(f, ns)
@@ -62,17 +63,17 @@ type featureset struct {
 func (fs *featureset) preGetMiddleware(next api.MiddlewareHandler) api.MiddlewareHandler {
 	return func(ctx context.Context, md api.Metadata, entityID string, val api.Value) (api.Value, error) {
 		logger := api.LoggerFromContext(ctx)
-		wg := &sync.WaitGroup{}
+		wg := new(sync.WaitGroup)
 		wg.Add(len(fs.features))
 
 		ret := api.Value{}
-		results := make(map[string]api.Value)
+		results := make(map[string]api.Value, len(fs.features))
 		for _, fqn := range fs.features {
 			go func(fqn string, wg *sync.WaitGroup) {
 				defer wg.Done()
 				val, _, err := fs.engine.Get(ctx, fqn, entityID)
 				if err != nil {
-					logger.Error(err, "failed to get feature %s", fqn)
+					logger.Error(err, "failed to get feature", "feature", fqn)
 					return
 				}
 				results[fqn] = val

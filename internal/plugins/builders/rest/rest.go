@@ -21,6 +21,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"time"
+
 	"github.com/die-net/lrucache"
 	"github.com/gregjones/httpcache"
 	"github.com/hashicorp/go-retryablehttp"
@@ -28,10 +33,6 @@ import (
 	manifests "github.com/raptor-ml/raptor/api/v1alpha1"
 	"github.com/raptor-ml/raptor/pkg/plugins"
 	"github.com/raptor-ml/raptor/pkg/pyexp"
-	"io"
-	"net/http"
-	"strings"
-	"time"
 )
 
 func init() {
@@ -53,7 +54,7 @@ type Spec struct {
 var httpMemoryCache = lrucache.New(500<<(10*2), 60*15) // 500MB; 15min
 
 func FeatureApply(md api.Metadata, builder manifests.FeatureBuilder, api api.FeatureAbstractAPI, engine api.EngineWithConnector) error {
-	spec := &Spec{}
+	spec := new(Spec)
 	err := json.Unmarshal(builder.Raw, spec)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal expression spec: %w", err)
@@ -73,7 +74,7 @@ func FeatureApply(md api.Metadata, builder manifests.FeatureBuilder, api api.Fea
 	}
 
 	tr := httpcache.NewTransport(httpMemoryCache)
-	tr.Transport = &retryablehttp.RoundTripper{}
+	tr.Transport = new(retryablehttp.RoundTripper)
 
 	r := rest{
 		engine:  engine,

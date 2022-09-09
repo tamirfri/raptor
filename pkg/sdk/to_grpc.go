@@ -18,30 +18,40 @@ package sdk
 
 import (
 	"fmt"
+	"reflect"
+	"time"
+
 	"github.com/raptor-ml/raptor/api"
 	coreApi "go.buf.build/raptor/api-go/raptor/core/raptor/core/v1alpha1"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"reflect"
-	"time"
 )
 
 func ToAPIScalar(val any) *coreApi.Scalar {
-	primitive := api.TypeDetect(val)
-
-	switch primitive {
-	case api.PrimitiveTypeString:
-		return &coreApi.Scalar{Value: &coreApi.Scalar_StringValue{StringValue: val.(string)}}
-	case api.PrimitiveTypeInteger:
-		return &coreApi.Scalar{Value: &coreApi.Scalar_IntValue{IntValue: int32(val.(int))}}
-	case api.PrimitiveTypeFloat:
-		return &coreApi.Scalar{Value: &coreApi.Scalar_FloatValue{FloatValue: val.(float64)}}
-	case api.PrimitiveTypeTimestamp:
-		return &coreApi.Scalar{Value: &coreApi.Scalar_TimestampValue{TimestampValue: timestamppb.New(val.(time.Time))}}
+	switch primitive := val.(type) {
+	case string:
+		return &coreApi.Scalar{Value: &coreApi.Scalar_StringValue{StringValue: primitive}}
+	case int32:
+		return &coreApi.Scalar{Value: &coreApi.Scalar_IntValue{IntValue: primitive}}
+	case int:
+		return &coreApi.Scalar{Value: &coreApi.Scalar_IntValue{IntValue: int32(primitive)}}
+	case int8:
+		return &coreApi.Scalar{Value: &coreApi.Scalar_IntValue{IntValue: int32(primitive)}}
+	case int16:
+		return &coreApi.Scalar{Value: &coreApi.Scalar_IntValue{IntValue: int32(primitive)}}
+	case int64:
+		return &coreApi.Scalar{Value: &coreApi.Scalar_IntValue{IntValue: int32(primitive)}}
+	case float64:
+		return &coreApi.Scalar{Value: &coreApi.Scalar_FloatValue{FloatValue: primitive}}
+	case float32:
+		return &coreApi.Scalar{Value: &coreApi.Scalar_FloatValue{FloatValue: float64(primitive)}}
+	case time.Time:
+		return &coreApi.Scalar{Value: &coreApi.Scalar_TimestampValue{TimestampValue: timestamppb.New(primitive)}}
 	default:
-		panic(fmt.Sprintf("unsupported type - is it scalar? (%v)", primitive.Scalar()))
+		panic(fmt.Sprintf("unsupported type - is it scalar? (%v)", api.TypeDetect(primitive).Scalar()))
 	}
 }
+
 func ToAPIValue(val any) *coreApi.Value {
 	if val == nil {
 		return nil
@@ -57,10 +67,9 @@ func ToAPIValue(val any) *coreApi.Value {
 	if primitive.Scalar() {
 		ret.Value = &coreApi.Value_ScalarValue{ScalarValue: ToAPIScalar(val)}
 	} else {
-		list := &coreApi.List{}
-		ret.Value = &coreApi.Value_ListValue{ListValue: list}
-
 		v := reflect.ValueOf(val)
+		list := &coreApi.List{Values: make([]*coreApi.Scalar, 0, v.Len())}
+		ret.Value = &coreApi.Value_ListValue{ListValue: list}
 		for i := 0; i < v.Len(); i++ {
 			list.Values = append(list.Values, ToAPIScalar(v.Index(i).Interface()))
 		}
@@ -90,6 +99,7 @@ func ToAPIPrimitive(p api.PrimitiveType) coreApi.Primitive {
 		return coreApi.Primitive_PRIMITIVE_TIMESTAMP_LIST
 	}
 }
+
 func ToAPIAggrFn(f api.WindowFn) coreApi.AggrFn {
 	switch f {
 	default:
@@ -106,6 +116,7 @@ func ToAPIAggrFn(f api.WindowFn) coreApi.AggrFn {
 		return coreApi.AggrFn_AGGR_FN_MAX
 	}
 }
+
 func ToAPIAggrFns(fs []api.WindowFn) []coreApi.AggrFn {
 	ret := make([]coreApi.AggrFn, len(fs))
 	for i, f := range fs {

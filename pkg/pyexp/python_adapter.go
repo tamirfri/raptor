@@ -19,10 +19,11 @@ package pyexp
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/go-logr/logr/funcr"
-	"github.com/raptor-ml/raptor/api"
 	"reflect"
 	"time"
+
+	"github.com/go-logr/logr/funcr"
+	"github.com/raptor-ml/raptor/api"
 )
 
 type PyVal struct {
@@ -31,13 +32,13 @@ type PyVal struct {
 	Fresh     bool      `json:"fresh"`
 }
 
-type PyDepGetter func(FQN string, entityID string, timestamp string, val *PyVal) string
+type PyDepGetter func(fqn string, entityID string, timestamp string, val *PyVal) string
 
 func PyExecReq(jsonPayload string, p PyDepGetter) (ExecRequest, error) {
-	dg := func(FQN string, entityID string, timestamp time.Time) (api.Value, error) {
+	dg := func(fqn string, entityID string, timestamp time.Time) (api.Value, error) {
 		pv := PyVal{}
-		if err := p(FQN, entityID, timestamp.Format(time.RFC3339), &pv); err != "" {
-			return api.Value{}, fmt.Errorf("%v", err)
+		if errMsg := p(fqn, entityID, timestamp.Format(time.RFC3339), &pv); errMsg != "" {
+			return api.Value{}, fmt.Errorf("%v", errMsg)
 		}
 
 		ret := api.Value{
@@ -54,7 +55,7 @@ func PyExecReq(jsonPayload string, p PyDepGetter) (ExecRequest, error) {
 	}
 
 	logger := funcr.New(func(prefix, args string) {
-		fmt.Println(prefix, args)
+		fmt.Println(prefix, args) //nolint:forbidigo // logger implementation
 	}, funcr.Options{})
 
 	ret := ExecRequest{
@@ -68,7 +69,7 @@ func PyExecReq(jsonPayload string, p PyDepGetter) (ExecRequest, error) {
 	return ret, nil
 }
 
-func JsonAny(o any, field string) string {
+func JSONAny(o any, field string) string {
 	v := reflect.ValueOf(o)
 	if v.Kind() == reflect.Ptr {
 		v = v.Elem()
@@ -86,6 +87,7 @@ func PyTime(str string, layout string) (time.Time, error) {
 	}
 	return time.Parse(layout, str)
 }
+
 func PyTimeRFC3339(t time.Time) string {
 	return t.Format(time.RFC3339)
 }

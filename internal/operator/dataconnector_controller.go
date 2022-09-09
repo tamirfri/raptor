@@ -25,11 +25,12 @@ package operator
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/raptor-ml/raptor/api"
 	raptorApi "github.com/raptor-ml/raptor/api/v1alpha1"
 	"github.com/raptor-ml/raptor/pkg/plugins"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -54,7 +55,7 @@ func (r *DataConnectorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	logger := log.FromContext(ctx)
 
 	// Fetch the Feature definition from the Kubernetes API.
-	conn := &raptorApi.DataConnector{}
+	conn := new(raptorApi.DataConnector)
 	err := r.Get(ctx, req.NamespacedName, conn)
 	if err != nil {
 		logger.Error(err, "Failed to get DataConnector")
@@ -122,7 +123,7 @@ func (r *DataConnectorReconciler) reconcileRequest(conn *raptorApi.DataConnector
 // SetupWithManager sets up the controller with the Controller Manager.
 func (r *DataConnectorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&raptorApi.DataConnector{}).
-		Owns(&appsv1.Deployment{}).
+		For(new(raptorApi.DataConnector)).
+		Owns(new(appsv1.Deployment)).
 		Complete(r)
 }

@@ -17,9 +17,10 @@ limitations under the License.
 package parquet
 
 import (
+	"time"
+
 	"github.com/raptor-ml/raptor/api"
 	"github.com/xitongsys/parquet-go/types"
-	"time"
 )
 
 type HistoricalRecord struct {
@@ -101,7 +102,7 @@ func NewHistoricalRecord(wn api.WriteNotification) HistoricalRecord {
 		}
 	case api.PrimitiveTypeIntegerList:
 		v := api.ToLowLevelValue[[]int](wn.Value.Value)
-		var l []int64
+		l := make([]int64, 0, len(v))
 		for _, i := range v {
 			l = append(l, int64(i))
 		}
@@ -115,7 +116,7 @@ func NewHistoricalRecord(wn api.WriteNotification) HistoricalRecord {
 		}
 	case api.PrimitiveTypeTimestampList:
 		v := api.ToLowLevelValue[[]time.Time](wn.Value.Value)
-		var l []int64
+		l := make([]int64, 0, len(v))
 		for _, t := range v {
 			l = append(l, types.TimeToTIMESTAMP_MICROS(t, false))
 		}

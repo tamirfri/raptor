@@ -20,13 +20,14 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"net/url"
+	"reflect"
+	"time"
+
 	"github.com/mitchellh/mapstructure"
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
-	"net/url"
-	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"time"
 )
 
 // +kubebuilder:object:generate=false
@@ -61,7 +62,7 @@ func stringToURLHookFunc(f reflect.Type, t reflect.Type, data interface{}) (inte
 	if f.Kind() != reflect.String {
 		return data, nil
 	}
-	if t != reflect.TypeOf(&url.URL{}) {
+	if t != reflect.TypeOf(new(url.URL)) {
 		return data, nil
 	}
 
@@ -71,7 +72,7 @@ func stringToURLHookFunc(f reflect.Type, t reflect.Type, data interface{}) (inte
 
 // ParseConfig parses the config, and extracts the secrets, into a map of key-value pairs
 func (in *DataConnector) ParseConfig(ctx context.Context, rdr client.Reader) (ParsedConfig, error) {
-	cfg := make(ParsedConfig)
+	cfg := make(ParsedConfig, 1+len(in.Spec.Config))
 	cfg["_fqn"] = fmt.Sprintf("%s.%s", in.GetName(), in.GetNamespace())
 
 	g, ctx := errgroup.WithContext(ctx)
@@ -88,7 +89,7 @@ func (in *DataConnector) ParseConfig(ctx context.Context, rdr client.Reader) (Pa
 		}
 		cv := cv // https://golang.org/doc/faq#closures_and_goroutines
 		g.Go(func() error {
-			secret := &corev1.Secret{}
+			secret := new(corev1.Secret)
 			err := rdr.Get(ctx, client.ObjectKey{
 				Namespace: in.GetNamespace(),
 				Name:      cv.SecretKeyRef.Name,

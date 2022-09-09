@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	"fmt"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -78,5 +79,5 @@ type FeatureSetList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&FeatureSet{}, &FeatureSetList{})
+	SchemeBuilder.Register(new(FeatureSet), new(FeatureSetList))
 }

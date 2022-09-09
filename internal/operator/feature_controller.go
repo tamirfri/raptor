@@ -22,12 +22,13 @@ package operator
 
 import (
 	"context"
+	"time"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"time"
 
 	raptorApi "github.com/raptor-ml/raptor/api/v1alpha1"
 )
@@ -47,7 +48,7 @@ func (r *FeatureReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	logger := log.FromContext(ctx)
 
 	// Fetch the Feature definition from the Kubernetes API.
-	feature := &raptorApi.Feature{}
+	feature := new(raptorApi.Feature)
 	err := r.Get(ctx, req.NamespacedName, feature)
 	if err != nil {
 		logger.Error(err, "Failed to get Feature")
@@ -108,7 +109,7 @@ func (r *FeatureReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 // SetupWithManager sets up the controller with the Controller Manager.
 func (r *FeatureReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&raptorApi.Feature{}).
+		For(new(raptorApi.Feature)).
 		Complete(r)
 }
 
@@ -124,7 +125,7 @@ func (r *FeatureReconciler) deleteFromConnector(ctx context.Context, feature *ra
 		feature.Spec.DataConnector.Namespace = feature.Namespace
 	}
 
-	conn := &raptorApi.DataConnector{}
+	conn := new(raptorApi.DataConnector)
 	err := r.Get(ctx, feature.Spec.DataConnector.ObjectKey(), conn)
 	if err != nil {
 		logger.Error(err, "Failed to get associated DataConnector")
@@ -135,7 +136,7 @@ func (r *FeatureReconciler) deleteFromConnector(ctx context.Context, feature *ra
 	if len(conn.Status.Features) == 0 {
 		return nil
 	}
-	var fts []raptorApi.ResourceReference
+	fts := make([]raptorApi.ResourceReference, 0, len(conn.Status.Features))
 	for _, f := range conn.Status.Features {
 		if f.Name != feature.Name {
 			fts = append(fts, f)
@@ -157,7 +158,7 @@ func (r *FeatureReconciler) addToConnector(ctx context.Context, feature *raptorA
 		feature.Spec.DataConnector.Namespace = feature.Namespace
 	}
 
-	conn := &raptorApi.DataConnector{}
+	conn := new(raptorApi.DataConnector)
 	err := r.Get(ctx, feature.Spec.DataConnector.ObjectKey(), conn)
 	if err != nil {
 		logger.Error(err, "Failed to get associated DataConnector")

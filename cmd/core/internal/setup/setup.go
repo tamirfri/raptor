@@ -18,9 +18,10 @@ package setup
 
 import (
 	"fmt"
-	"golang.org/x/sync/errgroup"
 	"net/http"
 	"os"
+
+	"golang.org/x/sync/errgroup"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 )
@@ -40,17 +41,16 @@ func HealthCheck(r *http.Request) error {
 	return g.Wait()
 }
 
-var (
-	setupLog = ctrl.Log.WithName("setup")
-)
+var setupLog = ctrl.Log.WithName("setup")
 
 func OrFail(err error, message string, keyAndValues ...any) {
 	if err != nil {
 		if setupLog.GetSink() == nil {
 			_, _ = fmt.Fprint(os.Stderr, append([]any{"error", err, "message", message}, keyAndValues...)...)
 		} else {
-			setupLog.Error(err, message, keyAndValues...)
+			setupLog.Error(err, message, keyAndValues...) //nolint:logrlint // assume even number of logger arguments
 		}
-		os.Exit(1)
+		// panic call all defered closers before existing (as opposed to os.Exit)
+		panic(fmt.Errorf("%v: %w", message, err))
 	}
 }

@@ -17,8 +17,17 @@ limitations under the License.
 package protoregistry
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
+	"path"
+	"strings"
+	"time"
+
 	"github.com/die-net/lrucache"
 	"github.com/google/uuid"
 	"github.com/gregjones/httpcache"
@@ -28,13 +37,6 @@ import (
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
-	"io"
-	"net/http"
-	"net/url"
-	"os"
-	"path"
-	"strings"
-	"time"
 )
 
 // ErrAlreadyRegistered is returned when a descriptor is already registered.
@@ -65,7 +67,7 @@ var httpMemoryCache = lrucache.New(100<<(10*2), 60*15)
 // getClient returns a http.Client that configured for retrying and caching with a maximum timeout of 5s.
 func getClient() *http.Client {
 	tr := httpcache.NewTransport(httpMemoryCache)
-	tr.Transport = &retryablehttp.RoundTripper{}
+	tr.Transport = new(retryablehttp.RoundTripper)
 	return &http.Client{
 		Transport: httpcache.NewTransport(httpMemoryCache),
 		Timeout:   5 * time.Second,
@@ -86,10 +88,15 @@ func SchemaToFDs(schema string) ([]*desc.FileDescriptor, string, error) {
 		}
 		filename = u.Host + u.Path
 
-		resp, err := getClient().Get(schema)
+		req, err := http.NewRequestWithContext(context.TODO(), http.MethodGet, schema, http.NoBody)
+		if err != nil {
+			return nil, "", fmt.Errorf("unable to request schema from url(%s): %w", schema, err)
+		}
+		resp, err := getClient().Do(req)
 		if err != nil {
 			return nil, "", fmt.Errorf("unable to fetch schema from url(%s): %w", schema, err)
 		}
+		defer resp.Body.Close()
 
 		if resp.StatusCode < 200 || resp.StatusCode > 299 {
 			return nil, "", fmt.Errorf("unable to fetch schema from url(%s), got status %d", schema, resp.StatusCode)

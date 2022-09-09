@@ -20,24 +20,27 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/go-logr/logr"
 	"github.com/raptor-ml/raptor/api"
 	"go.starlark.net/starlark"
-	"sync"
-	"time"
 )
 
 const localKeyDependencyGetter = "dependency_getter"
 
-type DependencyGetter func(FQN string, entityID string, timestamp time.Time) (api.Value, error)
-type ExecRequest struct {
-	Headers          map[string][]string
-	Payload          any
-	EntityID         string
-	Timestamp        time.Time
-	Logger           logr.Logger
-	DependencyGetter DependencyGetter
-}
+type (
+	DependencyGetter func(fqn string, entityID string, timestamp time.Time) (api.Value, error)
+	ExecRequest      struct {
+		Headers          map[string][]string
+		Payload          any
+		EntityID         string
+		Timestamp        time.Time
+		Logger           logr.Logger
+		DependencyGetter DependencyGetter
+	}
+)
 
 type InstructionOp int
 
@@ -88,7 +91,7 @@ const localKeyInstructions = "engine.instructions"
 func (r *runtime) Exec(req ExecRequest) (*ExecResponse, error) {
 	v, thread, err := r.exec(req, false)
 	if err != nil {
-		evalErr := &starlark.EvalError{}
+		evalErr := new(starlark.EvalError)
 		if ok := errors.As(err, &evalErr); ok {
 			req.Logger.WithValues("backtrace", evalErr.Backtrace()).Error(evalErr, "execution failed")
 			return nil, fmt.Errorf(evalErr.Backtrace())
@@ -111,19 +114,27 @@ func (r *runtime) Exec(req ExecRequest) (*ExecResponse, error) {
 		return nil, fmt.Errorf("this program must return an entity_id along with the value")
 	}
 
+	ib, ok := thread.Local(localKeyInstructions).(*InstructionsBag)
+	if !ok {
+		return nil, fmt.Errorf("failed to cast %v to *InstructionsBag", localKeyInstructions)
+	}
 	return &ExecResponse{
 		Value:        ret,
 		Timestamp:    ts,
 		EntityID:     eid,
-		Instructions: thread.Local(localKeyInstructions).(*InstructionsBag).Instructions,
+		Instructions: ib.Instructions,
 	}, nil
 }
+
 func (r *runtime) DiscoverDependencies() ([]string, error) {
 	_, thread, err := r.exec(ExecRequest{}, true)
 	if err != nil {
 		return nil, err
 	}
-	dd := thread.Local(localKeyDiscoverDependencies).(discoveredDependencies)
+	dd, ok := thread.Local(localKeyDiscoverDependencies).(discoveredDependencies)
+	if !ok {
+		return nil, fmt.Errorf("failed to cast %v to map[string]struct{}", localKeyDiscoverDependencies)
+	}
 	deps := make([]string, 0, len(dd))
 	for k := range dd {
 		deps = append(deps, k)
@@ -151,7 +162,7 @@ func (r *runtime) exec(req ExecRequest, discoveryMode bool) (starlark.Value, *st
 		Print: func(_ *starlark.Thread, msg string) { req.Logger.WithName("program").Info(msg) },
 	}
 	thread.SetLocal(localKeyNow, req.Timestamp)
-	thread.SetLocal(localKeyInstructions, &InstructionsBag{})
+	thread.SetLocal(localKeyInstructions, new(InstructionsBag))
 	if discoveryMode {
 		thread.SetLocal(localKeyDiscoverDependencies, make(discoveredDependencies))
 	} else {
@@ -176,8 +187,8 @@ func (r *runtime) exec(req ExecRequest, discoveryMode bool) (starlark.Value, *st
 }
 
 func (r *runtime) ExecWithEngine(ctx context.Context, req ExecRequest, e api.Engine) (*ExecResponse, error) {
-	req.DependencyGetter = func(FQN string, entityID string, timestamp time.Time) (api.Value, error) {
-		v, _, err := e.Get(ctx, FQN, entityID)
+	req.DependencyGetter = func(fqn string, entityID string, timestamp time.Time) (api.Value, error) {
+		v, _, err := e.Get(ctx, fqn, entityID)
 		return v, err
 	}
 	ret, err := r.Exec(req)
